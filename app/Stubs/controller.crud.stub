@@ -1,0 +1,73 @@
+<?php
+namespace {{ ControllerNamespace }};
+
+use {{ FilterNamespace }};
+use {{ StoreRequestNamespace }};
+use {{ UpdateRequestNamespace }};
+use {{ ResourceNamespace }};
+use {{ ModelNamespace }};
+
+use App\Traits\V1\ApiResponse;
+use App\Http\Controllers\Api\Controller;
+use Illuminate\Auth\Access\AuthorizationException;
+
+class {{ Resource }}Controller extends Controller
+{
+    use ApiResponse;
+
+    /**
+     * Display a listing of the resource.
+     */
+    public function index({{ Resource }}Filter $filters): \Illuminate\Http\Resources\Json\AnonymousResourceCollection
+    {
+        $this->isAuthorized('all', {{ Resource }}::class);
+
+        return {{ Resource }}Resource::collection(
+            {{ Resource }}::query()->filter($filters)->paginate()
+        );
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     * @throws AuthorizationException
+     */
+    public function store(Store{{ Resource }}Request $request): \Illuminate\Http\JsonResponse
+    {
+        $this->isAuthorized('create', {{ Resource }}::class);
+
+        {{ ResourceVariable }} = {{ Resource }}::query()->create($request->validated());
+        return self::success(message: "{{ Resource }} created successfully", data: {{ Resource }}Resource::make({{ ResourceVariable }}));
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show({{ Resource }} {{ ResourceVariable }}): {{ Resource }}Resource
+    {
+        $this->isAuthorized('show', {{ ResourceVariable }});
+
+        return new {{ Resource }}Resource({{ ResourceVariable }});
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Update{{ Resource }}Request $request, {{ Resource }} {{ ResourceVariable }}): \Illuminate\Http\JsonResponse
+    {
+        {{ ResourceVariable }} = tap({{ ResourceVariable }})->update($request->validated());
+
+        return self::success(message: "{{ Resource }} updated successfully", data: {{ Resource }}Resource::make({{ ResourceVariable }}));
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy({{ Resource }} {{ ResourceVariable }}): \Illuminate\Http\JsonResponse
+    {
+        $this->isAuthorized('delete', {{ ResourceVariable }});
+
+        {{ ResourceVariable }}->delete();
+
+        return self::success(message: "{{ Resource }} deleted successfully");
+    }
+}
