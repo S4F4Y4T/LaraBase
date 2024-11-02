@@ -5,24 +5,21 @@ namespace App\Actions\V1\Commands;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Artisan;
 
-class MakeControllerAction extends BaseAction
+class MakeModelAction extends BaseAction
 {
     /**
      * Create a new class instance.
      */
     public function __invoke(
-        $resource,
-        $version
+        $resource
     ): void
     {
-        $meta = $this->generateData($resource, $version, 'controller');
+        $meta = $this->generateData($resource, layer: 'model');
 
-        Artisan::call('make:controller', [
+        Artisan::call('make:model', [
             'name' => $meta['command'],
         ]);
 
         $this->generateContent($meta);
-
-
     }
 }

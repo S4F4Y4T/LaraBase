@@ -1,0 +1,15 @@
+<?php
+
+namespace {{ Namespace }};
+
+class {{ Resource }}Filter extends QueryFilter
+{
+    protected array $sort = ['id'];
+    protected array $includes = [];
+
+    public function search(string $value): void
+    {
+//      $this->builder->where('name', 'like', '%' . $value . '%');
+    }
+
+}

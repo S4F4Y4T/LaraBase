@@ -3,9 +3,17 @@
 namespace App\Console\Commands;
 
 use App\Actions\V1\Commands\MakeControllerAction;
+use App\Actions\V1\Commands\MakeFilterAction;
+use App\Actions\V1\Commands\MakeMigrationAction;
+use App\Actions\V1\Commands\MakeModelAction;
+use App\Actions\V1\Commands\MakePolicyAction;
+use App\Actions\V1\Commands\MakeRequestAction;
+use App\Actions\V1\Commands\MakeResourceAction;
+use App\Actions\V1\Commands\MakeRouteAction;
+use App\Actions\V1\Commands\MakeServiceAction;
+use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\PromptsForMissingInput;
-use Illuminate\Support\Facades\Artisan;
 
 class Crud extends Command implements PromptsForMissingInput
 {
@@ -25,86 +33,91 @@ class Crud extends Command implements PromptsForMissingInput
 
     /**
      * Execute the console command.
+     * @throws Exception
      */
-    public function handle(
-        MakeControllerAction $controllerAction
-    ): int
-    {
-        $resource = ucfirst($this->argument('resource'));
-        $resourceLower = strtolower($resource);
-        $version  = ucfirst($this->argument('v') ? $this->argument('v') : 'V1');
-        $baseNamespace = 'App';
-        $replace = [
-            'Resource' => $resource,
-            'ResourceVariable' => '$'.$resourceLower,
-        ];
 
-        if (!$this->confirm('Confirm generation of API resource: ' . $resource . ' for version ' . $version . '?')) {
+    public function handle(
+        MakeControllerAction $controllerAction,
+        MakeMigrationAction $migrationAction,
+        MakeModelAction $modelAction,
+        MakeRequestAction $requestAction,
+        MakeResourceAction $resourceAction,
+        MakeFilterAction $filterAction,
+        MakeRouteAction $routeAction
+    ): int {
+        $resource = $this->argument('resource');
+        $version = $this->argument('v') ?: 'V1';
+
+        if (!$this->confirm("Confirm generation of API resource: $resource for version $version?")) {
             $this->warn('Operation cancelled by the user.');
-            return 0;
+            return 1;
         }
 
-        $this->info("Generating Migration...");
-        Artisan::call('make:migration', [
-            'name' => "create_". $resourceLower ."_table",
-        ]);
+        $this->info("Provide data info");
+        $data = $this->collectColumnData();
+        $bar = $this->output->createProgressBar(8);
 
-        //Model
-        $this->info("Generating Model...");
-        Artisan::call('make:model', [
-            'name' => $resource,
-            '--factory' => true,
-            '--seed' => true,
-        ]);
-        $replace['ModelNamespace'] = "{$baseNamespace}\\Models\\{$resource}";
+        // Define tasks with action callbacks
+        $actions = [
+            'Generating Migration...' => fn() => $migrationAction($resource, $version, $data),
+            'Generating Model...' => fn() => $modelAction($resource),
+            'Generating Request Validation...' => fn() => [
+                $requestAction($resource, $version, $data),        // For creation request
+                $requestAction($resource, $version, $data, 'update') // For update request
+            ],
+            'Generating Resource...' => fn() => $resourceAction($resource, $version, $data),
+            'Generating Filter...' => fn() => $filterAction($resource, $version),
+            'Generating Controller...' => fn() => $controllerAction($resource, $version),
+            'Generating Route...' => fn() => $routeAction($resource, $version),
+        ];
 
-        //request validation
-        $this->info("Generating Request Validation...");
-        Artisan::call('make:request', [
-            'name' => "$version/$resource/Store{$resource}Request",
-            '--force' => true
-        ]);
-        Artisan::call('make:request', [
-            'name' => "$version/$resource/Update{$resource}Request",
-            '--force' => true
-        ]);
-        $replace['StoreRequestNamespace'] = "{$baseNamespace}\\Http\\Requests\\{$version}\\{$resource}\\Store{$resource}Request";
-        $replace['UpdateRequestNamespace'] = "{$baseNamespace}\\Http\\Requests\\{$version}\\{$resource}\\Update{$resource}Request";
+        foreach ($actions as $message => $action) {
+            $this->progress($bar, $message);
+            try {
+                $action();
+            } catch (\Exception $e) {
+                $this->error("Failed to execute action: $message. Error: " . $e->getMessage());
+                info($e);
+                return 1;
+            }
+        }
 
-        //resource
-        $this->info("Generating Resource...");
-        Artisan::call('make:resource', [
-            'name' => "$version/{$resource}Resource",
-        ]);
-        $replace['ResourceNamespace'] = "{$baseNamespace}\\Http\\Resources\\{$version}\\{$resource}Resource";
-
-
-        //policy
-        $this->info("Generating Policy...");
-        Artisan::call('make:policy', [
-            'name' => "$version/{$resource}Policy",
-        ]);
-
-        //filter
-        $this->info("Generating Filter...");
-        Artisan::call('make:class', [
-            'name' => "Filters/$version/{$resource}Filter",
-        ]);
-        $replace['FilterNamespace'] = "{$baseNamespace}\\Filters\\{$version}\\{$resource}Filter";
-
-        //service
-        $this->info("Generating Service...");
-        Artisan::call('make:class', [
-            'name' => "Services/$version/{$resource}Service",
-        ]);
-        $replace['ServiceNamespace'] = "{$baseNamespace}\\Services\\{$version}\\$resource}Service";
-
-        //controller
-        $this->info("Generating Controller...");
-        $controllerAction($resource, $version, $replace);
-
-        $this->info("All components for $resource have been successfully created!");
+        $this->progress($bar, 'Finalizing...');
+        $bar->finish();
+        $this->info("\nAll components for $resource have been successfully created!");
 
         return 0;
     }
+
+    private function progress($bar, $message): void
+    {
+        $this->info($message);
+        $bar->advance();
+        echo PHP_EOL; // Add a new line after each progress bar step
+        usleep(100000); // Optional delay for visualization
+    }
+
+    private function collectColumnData(): array {
+        $data = [];
+        $typeOptions = [
+            'string', 'integer', 'text', 'boolean', 'date'
+        ];
+        $ruleOptions = ['required', 'nullable', 'string', 'integer', 'max:255', 'email'];
+
+
+        while ($this->confirm('Add a column?')) {
+            $column = $this->ask('Input column name') ?? '';
+
+            if (empty($column)) continue;
+
+            $data[$column] = [
+                'type' => $this->choice('Choose column type?', $typeOptions, 0),
+                'default' => $this->ask('Input default value'),
+                'validation' => $this->choice('Choose validation rules?', $ruleOptions, 0, null, true),
+            ];
+        }
+
+        return $data;
+    }
+
 }

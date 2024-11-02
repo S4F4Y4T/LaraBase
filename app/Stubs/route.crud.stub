@@ -1,0 +1,6 @@
+<?php
+
+use {{ ControllerImport }};
+use Illuminate\Support\Facades\Route;
+
+Route::apiResource('{{ ResourcePlural }}', {{ Resource }}Controller::class)->middleware('jwt.auth');

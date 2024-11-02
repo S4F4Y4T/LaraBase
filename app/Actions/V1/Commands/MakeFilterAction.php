@@ -5,8 +5,10 @@ namespace App\Actions\V1\Commands;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Artisan;
 
-class MakeControllerAction extends BaseAction
+class MakeFilterAction extends BaseAction
 {
+    public function __construct(){}
+
     /**
      * Create a new class instance.
      */
@@ -15,14 +17,12 @@ class MakeControllerAction extends BaseAction
         $version
     ): void
     {
-        $meta = $this->generateData($resource, $version, 'controller');
+        $meta = $this->generateData($resource, $version, 'filter');
 
-        Artisan::call('make:controller', [
+        Artisan::call('make:class', [
             'name' => $meta['command'],
         ]);
 
         $this->generateContent($meta);
-
-
     }
 }
